@@ -1,82 +1,95 @@
 import os
 import json
+import urllib.parse
 import anthropic
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing import List
-from models import SourceURL
+from models import SourceURL, SourceType, SourceStatus
 
-# 0. Carga las variables del archivo .env a la memoria
 load_dotenv()
 
-# 1. Definimos un modelo contenedor para que Pydantic genere el esquema de la lista
-class AgentOutput(BaseModel):
+# 1. GENERACIÓN DETERMINISTA (Para URLs predecibles)
+def get_deterministic_urls(company_name: str) -> List[SourceURL]:
+    encoded_name = urllib.parse.quote(company_name)
+    return [
+        SourceURL(
+            source_type=SourceType.LINKEDIN,
+            url=f"https://www.linkedin.com/jobs/search/?keywords={encoded_name}&location=Costa%20Rica",
+            status=SourceStatus.FOUND
+        ),
+        SourceURL(
+            source_type=SourceType.INDEED_CR,
+            url=f"https://cr.indeed.com/jobs?q={encoded_name}",
+            status=SourceStatus.FOUND
+        ),
+        SourceURL(
+            source_type=SourceType.BUILTIN,
+            url=f"https://builtin.com/jobs?search={encoded_name}&country=CRI&allLocations=true",
+            status=SourceStatus.FOUND
+        )
+    ]
+
+# 2. GENERACIÓN ESTOCÁSTICA (Solo para lo que requiere búsqueda real)
+class AI_AgentOutput(BaseModel):
     sources: List[SourceURL]
 
-def agent_1_discover(company_name: str) -> List[SourceURL]:
+def get_ai_urls(company_name: str) -> List[SourceURL]:
     client = anthropic.Anthropic()
     
-    # 2. Convertimos tu Pydantic model a un JSON Schema para la API de Anthropic
     record_tool = {
         "name": "record_urls",
-        "description": "Registra las URLs encontradas en la estructura de datos requerida.",
-        "input_schema": AgentOutput.model_json_schema()
+        "description": "Registra las 3 URLs investigadas.",
+        "input_schema": AI_AgentOutput.model_json_schema()
     }
 
-    print(f"Buscando fuentes OSINT para: {company_name}...")
-    
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001", # String corregido a la versión actual estable
+        model="claude-3-5-haiku-20241022", # Vuelve a la versión que soporte tu entorno
         max_tokens=1000,
-        # Inyectamos tu herramienta de búsqueda nativa y nuestra herramienta de formateo
         tools=[
             {"type": "web_search_20250305", "name": "web_search"},
             record_tool
         ],
-        # OBLIGAMOS a Claude a usar esta herramienta para emitir su respuesta
         tool_choice={"type": "tool", "name": "record_urls"}, 
-        system="""Eres un especialista en OSINT de mercado laboral. 
-        Tu único objetivo es encontrar URLs reales y precisas de job postings.
+        system="""Eres un investigador OSINT. Usa web_search para encontrar 3 cosas de una empresa.
         
-        REGLAS ESTRICTAS DE VALIDACIÓN:
-        1. CERO ALUCINACIONES: NO asumas subdominios lógicos (ej. careers.empresa.com). Si la búsqueda web no te da la URL exacta y verificable, repórtala como 'not_found'.
-        2. FILTROS GEOGRÁFICOS: Para LinkedIn, BuiltIn e Indeed, DEBES construir o encontrar la URL que incluya los parámetros de búsqueda para Costa Rica.
-        3. MUROS DE LOGIN: Plataformas como Glassdoor utilizan IDs dinámicos ofuscados. Si encuentras la URL pero requiere autenticación para ver los empleos, usa el status 'requires_login'.""",
+        REGLAS:
+        1. careers_page: Encuentra la página oficial de vacantes. NO asumas "careers.empresa.com". Busca el enlace real (ej. jobs.akamai.com). Si no lo hallas, status: 'not_found'.
+        2. glassdoor: Encuentra el perfil de la empresa. Usa SIEMPRE status: 'requires_login'.
+        3. bebee: Verifica si existe un perfil. Si no aparece en la búsqueda, status: 'not_found'.
+        """,
         messages=[{
             "role": "user",
-            "content": f"""Encuentra URLs de job postings para la empresa: {company_name}
-            
-            Requisitos por fuente:
-            - careers_page: Encuentra el portal oficial de empleo (ej. jobs.empresa.com o empresa.wd1.myworkdayjobs.com).
-            - linkedin: URL de búsqueda filtrada por la empresa y ubicación Costa Rica.
-            - indeed_cr: URL de búsqueda filtrada por la empresa en cr.indeed.com.
-            - glassdoor: URL del perfil de la empresa (usa status requires_login si aplica).
-            - builtin: URL filtrada por empresa y país CRI.
-            - bebee: URL del perfil de la empresa en CR.
-            """
+            "content": f"Investiga estas 3 fuentes (careers_page, glassdoor, bebee) para: {company_name}"
         }]
     )
 
-    # 3. Extraemos y validamos el bloque de respuesta directamente en Pydantic
     for block in response.content:
         if block.type == "tool_use" and block.name == "record_urls":
-            # Si Claude alucinó un formato, Pydantic lanzará ValidationError aquí
-            validated_data = AgentOutput(**block.input)
+            validated_data = AI_AgentOutput(**block.input)
             return validated_data.sources
 
-    raise ValueError("El agente no devolvió la estructura de datos esperada.")
+    raise ValueError("El agente no devolvió la estructura.")
+
+# 3. ORQUESTACIÓN
+def agent_1_discover(company_name: str) -> List[SourceURL]:
+    print(f"Generando URLs deterministas para: {company_name}...")
+    deterministic_urls = get_deterministic_urls(company_name)
+    
+    print(f"Iniciando Agente OSINT para dominios variables de {company_name}...")
+    ai_urls = get_ai_urls(company_name)
+    
+    # Combinamos ambas listas
+    return deterministic_urls + ai_urls
 
 if __name__ == "__main__":
     target_company = "Akamai"
     
-    # Ejecutamos el agente
     urls_found = agent_1_discover(target_company)
     
-    # Preparamos el sistema de archivos
     os.makedirs("data", exist_ok=True)
     output_file = "data/akamai_urls.json"
     
-    # Serializamos usando las capacidades nativas de Pydantic para manejar Enums y HttpUrls
     final_output = {
         "company": target_company,
         "sources": [url.model_dump(mode="json") for url in urls_found]
