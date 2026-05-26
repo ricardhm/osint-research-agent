@@ -27,6 +27,11 @@ def get_deterministic_urls(company_name: str) -> List[SourceURL]:
             source_type=SourceType.BUILTIN,
             url=f"https://builtin.com/jobs?search={encoded_name}&country=CRI&allLocations=true",
             status=SourceStatus.FOUND
+        ),
+        SourceURL(
+            source_type=SourceType.GLASSDOOR,
+            url=f"https://www.google.com/search?q=site:glassdoor.com+%22{encoded_name}%22+jobs+Costa+Rica",
+            status=SourceStatus.REQUIRES_LOGIN
         )
     ]
 
@@ -39,28 +44,28 @@ def get_ai_urls(company_name: str) -> List[SourceURL]:
     
     record_tool = {
         "name": "record_urls",
-        "description": "Registra las 3 URLs investigadas.",
+        "description": "Registra las URLs de careers_page y bebee.",
         "input_schema": AI_AgentOutput.model_json_schema()
     }
 
     response = client.messages.create(
-        model="claude-3-5-haiku-20241022", # Vuelve a la versión que soporte tu entorno
+        model="claude-haiku-4-5-20251001",
         max_tokens=1000,
         tools=[
             {"type": "web_search_20250305", "name": "web_search"},
             record_tool
         ],
         tool_choice={"type": "tool", "name": "record_urls"}, 
-        system="""Eres un investigador OSINT. Usa web_search para encontrar 3 cosas de una empresa.
+        system="""Eres un investigador OSINT experto en búsquedas avanzadas.
         
         REGLAS:
-        1. careers_page: Encuentra la página oficial de vacantes. NO asumas "careers.empresa.com". Busca el enlace real (ej. jobs.akamai.com). Si no lo hallas, status: 'not_found'.
-        2. glassdoor: Encuentra el perfil de la empresa. Usa SIEMPRE status: 'requires_login'.
-        3. bebee: Verifica si existe un perfil. Si no aparece en la búsqueda, status: 'not_found'.
+        1. careers_page: Encuentra el portal oficial de vacantes real (ej. jobs.empresa.com). NO asumas "careers.empresa.com". Si no lo hallas con certeza, status: 'not_found'.
+        2. bebee: Haz una búsqueda estricta. Busca el perfil de empresa. La URL SIEMPRE tiene el formato 'https://www.bebee.com/company/nombre-empresa'. Si no lo encuentras, status: 'not_found'.
         """,
         messages=[{
             "role": "user",
-            "content": f"Investiga estas 3 fuentes (careers_page, glassdoor, bebee) para: {company_name}"
+            "content": f"""Encuentra careers_page y el perfil de bebee para: {company_name}.
+            Tip para beBee: Usa la herramienta de búsqueda con 'site:bebee.com/company {company_name}' para encontrar la URL exacta."""
         }]
     )
 
