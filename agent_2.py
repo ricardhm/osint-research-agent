@@ -184,6 +184,34 @@ async def agent_2_orchestrate(input_file: str, output_file: str):
     print(f"\n🚀 Agente 2 completado exitosamente.")
     print(f"📊 {len(all_raw_postings)} vacantes en crudo guardadas en {output_file}")
 
+def run_scraper(sources: List[SourceURL]) -> List[RawPosting]:
+    """
+    Adaptador sincrónico para el Orquestador Maestro (main.py).
+    Toma la lista de URLs, maneja el entorno asíncrono y devuelve los objetos crudos.
+    """
+    async def _process_urls():
+        all_raw_postings: List[RawPosting] = []
+        
+        for source in sources:
+            url_str = str(source.url)
+            
+            # Enrutador por tipo de fuente
+            if source.source_type in [SourceType.CAREERS_PAGE, SourceType.INDEED_CR, SourceType.BUILTIN, SourceType.BEBEE]:
+                postings = scrape_with_firecrawl(url_str, source.source_type)
+                all_raw_postings.extend(postings)
+                
+            elif source.source_type in [SourceType.LINKEDIN, SourceType.GLASSDOOR]:
+                postings = await scrape_with_playwright(url_str, source.source_type)
+                all_raw_postings.extend(postings)
+                
+            else:
+                print(f"⚠️ SourceType no mapeado: {source.source_type}")
+                
+        return all_raw_postings
+
+    # Ejecutamos el loop de eventos asíncrono y devolvemos la lista limpia
+    return asyncio.run(_process_urls())
+
 if __name__ == "__main__":
     input_path = "data/akamai_urls.json"
     output_path = "data/akamai_postings_raw.json"
