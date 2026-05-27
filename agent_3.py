@@ -73,11 +73,16 @@ def evaluate_job_freshness_with_llm(posting: RawPosting) -> LLMFreshnessOutput:
     for block in response.content:
         if block.type == "tool_use" and block.name == "record_classification":
             try:
-                # Validamos el output de Claude contra el modelo estricto
-                return LLMFreshnessOutput(**block.input)
+                result = LLMFreshnessOutput(**block.input)
+                print(f"[LLM_DECISION] '{posting.title}' → {result.age_classification.value}")
+                return result
             except ValidationError as e:
-                print(f"Error de validación Pydantic desde el LLM: {e}")
-                # Fallback seguro en caso de alucinación del esquema
+                print(
+                    f"[PYDANTIC_FALLBACK] '{posting.title}' — LLM devolvió esquema inválido, "
+                    f"forzando DATE_UNKNOWN.\n"
+                    f"  raw_input={block.input}\n"
+                    f"  validation_error={e}"
+                )
                 return LLMFreshnessOutput(
                     age_classification=AgeClassification.DATE_UNKNOWN,
                     stale_signal=StaleSignal.NONE,
