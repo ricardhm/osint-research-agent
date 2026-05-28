@@ -142,3 +142,85 @@ class CRCultureIntelOutput(BaseModel):
     sentiment_signals:           CRSentimentSignals
     representative_quotes:       List[RepresentativeQuote]
     flags:                       List[str] = Field(default_factory=list)
+
+
+# ── AGENT 5: Inside Scoop for Job Seekers ──────────────────────────────────────
+
+class SignalConfidence(str, Enum):
+    HIGH   = "high"
+    MEDIUM = "medium"
+    LOW    = "low"
+
+class OrgFocus(str, Enum):
+    ENGINEERING_HUB  = "engineering_hub"
+    OPS_SERVICES_HUB = "ops_services_hub"
+    SALES_HUB        = "sales_hub"
+    MIXED            = "mixed"
+
+class CareerCeiling(str, Enum):
+    PRODUCT_ENGINEERING_PRESENT = "product_engineering_present"
+    SERVICES_OPS_ONLY           = "services_ops_only"
+    AMBIGUOUS                   = "ambiguous"
+
+class SenioritySkew(str, Enum):
+    SENIOR = "senior"
+    MID    = "mid"
+    JUNIOR = "junior"
+    MIXED  = "mixed"
+
+class PayTransparency(str, Enum):
+    PRESENT = "present"
+    ABSENT  = "absent"
+    PARTIAL = "partial"
+
+class HiringVelocity(str, Enum):
+    HIGH   = "high"
+    MEDIUM = "medium"
+    LOW    = "low"
+    STALE  = "stale"
+
+
+class GrowthCue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    signal:     str
+    evidence:   str
+    confidence: SignalConfidence
+
+class AmbiguousCue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    signal:           str
+    evidence:         str
+    confidence:       SignalConfidence
+    ambiguity_reason: str
+
+class StabilityCue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    signal:     str
+    evidence:   str
+    confidence: SignalConfidence
+
+class RedFlag(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    signal:     str
+    evidence:   str
+    confidence: SignalConfidence
+
+class RoleCluster(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cluster_name:   str
+    posting_count:  int
+    seniority_skew: SenioritySkew
+
+class InsideScoopOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    growth_cues:              List[GrowthCue]
+    ambiguous_cues:           List[AmbiguousCue]
+    stability_cues:           List[StabilityCue]
+    red_flags:                List[RedFlag]
+    red_flags_note:           Optional[str]
+    org_focus:                OrgFocus
+    org_focus_justification:  str
+    career_ceiling:           CareerCeiling
+    role_clusters:            List[RoleCluster]
+    pay_transparency_signal:  PayTransparency
+    hiring_velocity:          HiringVelocity
