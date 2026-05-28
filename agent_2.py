@@ -44,10 +44,15 @@ def extract_postings_from_text(content: str, source_url: str, source_type: Sourc
             max_tokens=4096,
             tools=[record_tool],
             tool_choice={"type": "tool", "name": "record_postings"},
-            system="""Eres un extractor experto de datos de RRHH. 
+            system="""Eres un extractor experto de datos de RRHH.
             Tu objetivo es extraer empleos a partir del texto scrapeado de una web.
             Debes inferir el título, departamento, ubicación, fecha (si es visible), job_id, URL de la vacante, y un extracto de la descripción (máximo 250 caracteres).
-            IMPORTANTE: Si la vacante no muestra su URL individual, utiliza la URL de la página fuente proporcionada.""",
+            IMPORTANTE: Si la vacante no muestra su URL individual, utiliza la URL de la página fuente proporcionada.
+
+            REGLA CRÍTICA para posted_date:
+            - Si la fecha está en formato relativo ("2 days ago", "hace 3 días", "3 days ago", "1 week ago"), cópiala EXACTAMENTE como string. NO la conviertas a ISO8601.
+            - Solo usa formato ISO8601 si la fecha absoluta está explícitamente visible en el texto.
+            - Si no hay fecha visible, usa null.""",
             messages=[{
                 "role": "user",
                 "content": f"URL Fuente: {source_url}\nTipo de Fuente: {source_type.value}\n\nContenido Scrapeado:\n{safe_content}"

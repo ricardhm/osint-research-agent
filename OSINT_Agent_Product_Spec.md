@@ -1,10 +1,10 @@
 # AGENT PRODUCT SPECIFICATION
 ## CR Tech Market OSINT Research Agent ("Inside Scoop Engine")
 
-**Version:** 0.2 — Post-Implementation Revision  
+**Version:** 0.3 — Post-Implementation Revision  
 **Author:** [Your Name]  
 **Date:** May 2026 — Revised 2026-05-27  
-**Status:** v0.2 — Agents 1–3 implemented; post-incident patch applied 2026-05-27 (see `POSTMORTEM_2026-05-27.md`)
+**Status:** v0.3 — Agents 1–3 implemented; patches applied 2026-05-27 (see `POSTMORTEM_2026-05-27.md`, `POSTMORTEM_2026-05-27-dedup.md`)
 
 ---
 
@@ -211,10 +211,15 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 
 **Task description:** Classify each posting as ACTIVE (<90 days), BORDERLINE (90–120 days), STALE (>120 days), or DATE_UNKNOWN. Apply job ID sequence heuristic to detect undated stale postings.
 
-**Stale Detection Logic:**
-1. If posted_date is present: compare to current date, classify by threshold
-2. If posted_date is null: examine job_id for sequential numbering patterns. If job_id is ≥15% lower than the median job_id across other current postings from same source, flag as LIKELY_STALE
-3. If no job_id and no date: classify as DATE_UNKNOWN, keep in output with flag
+**Stale Detection Logic (three-tier cascade):**
+1. If `posted_date` is present:
+   - a. Try ISO8601 parse → classify by `age.days` against thresholds (`StaleSignal.DATE`)
+   - b. If ISO8601 fails, try relative date parser: "hace N días / semanas / meses", "N days / weeks / months ago", "just now / ahora mismo" → compute `age.days` → classify (`StaleSignal.DATE`). Emits `[RELATIVE_DATE]` log line.
+   - c. If both fail, fall through to step 2
+2. If `posted_date` is null or unparseable: examine `job_id` for sequential numbering. If `job_id` is ≥15% below the median `job_id` across all postings from same source, classify as `STALE` (`StaleSignal.JOB_ID_SEQUENCE`)
+3. If no date signal and no conclusive `job_id`: LLM fallback — semantic analysis of `description_snippet`. Emits `[LLM_DECISION]` or `[PYDANTIC_FALLBACK]` log line.
+
+**Deduplication (pre-classification):** runs before the cascade on the full raw posting list. Key is `_normalize_key(title)` — NFKD-decomposed, lowercase, combining characters stripped. Location is excluded from the key: each source formats location differently and it is not a stable cross-source axis. Tiebreaker: `careers_page(0) > builtin(1) > indeed_cr(2) > linkedin(3) > bebee(4)` — lower priority index replaces higher.
 
 **Output per posting:** original record + `{ "age_classification": "ACTIVE | BORDERLINE | STALE | DATE_UNKNOWN", "stale_signal": "date | job_id_sequence | none", "archive_flag": "boolean" }`
 
@@ -339,9 +344,13 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 
 | Case | Input | Expected Output | Failure Mode to Detect |
 |---|---|---|---|
-| Common | Posting with explicit date 45 days ago | ACTIVE | None |
+| Common | Posting with explicit date 45 days ago | ACTIVE, StaleSignal.DATE | None |
 | Edge | Posting with date exactly 90 days ago | BORDERLINE, not ACTIVE | Off-by-one threshold error |
-| Adversarial | Posting with no date, job_id = 1847 when median is 3200 | LIKELY_STALE via sequence heuristic | Silent failure — agent classifies as DATE_UNKNOWN instead of applying heuristic |
+| Adversarial | Posting with no date, job_id = 1847 when median is 3200 | STALE via JOB_ID_SEQUENCE heuristic | Silent failure — classifies as DATE_UNKNOWN instead of applying heuristic |
+| Relative date (ES) | `posted_date = "hace 3 días"` | ACTIVE, StaleSignal.DATE, `[RELATIVE_DATE]` log | Falls to LLM → DATE_UNKNOWN instead of parsing |
+| Relative date (EN) | `posted_date = "2 weeks ago"` | ACTIVE, StaleSignal.DATE, `[RELATIVE_DATE]` log | Same as above |
+| Cross-source dedup | Same role from `careers_page` ("Costa Rica") and `indeed_cr` ("San José, Costa Rica") | 1 posting, source = careers_page | Dedup key mismatch → 2 postings pass through → inflated hiring signal |
+| Unicode dedup | Same role from two sources, one with "San José", one with "San Jose" | 1 posting | No NFKD normalization → key mismatch → duplicate passes |
 
 **Agent 5 (Signals Extractor) — highest quality risk:**
 
@@ -391,6 +400,8 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 | **Cascade Failure** | Yes — medium risk | Stale Filter error → corrupts Signals input | Bad stale classification → wrong signals → wrong Insights | Human checkpoint CP1 breaks the cascade; Agent 5 receives human-validated postings list |
 | **Silent Failure** | **Yes — highest risk** | Agent 3 (Stale Filter) | Agent returns DATE_UNKNOWN instead of applying job_id heuristic | Mandatory: if DATE_UNKNOWN count >30% of total postings, trigger human alert before proceeding |
 | **Forced tool_choice blocking** | **Yes — confirmed in v0.1** | Agent 1 (URL Discovery) | `tool_choice` with a specific tool name prevents any other tool from running; model fills the forced tool with prior knowledge; hallucinated URLs pass schema validation and reach Agent 2 where they yield zero postings | Two-step call pattern: `web_search` in Step 1 with no `tool_choice`, `record_urls` forced in Step 2 with Step 1 text as context. Never place a search prerequisite and its downstream recorder in the same call with a forced `tool_choice` name |
+| **Cross-source location format variance** | **Yes — confirmed in v0.1** | Agent 3 (Stale Filter) — dedup stage | Same job appears N times (one per source) because location field format differs per job board; `title\|location` key never collides; inflated posting count drives false hiring velocity signal in Agent 5 | Dedup key must be title-only (NFKD-normalized). Location is not a stable cross-source axis. |
+| **Non-ISO date string bypasses deterministic path** | **Yes — confirmed in v0.1** | Agent 3 (Stale Filter) — date parse stage | `posted_date = "hace 3 días"` is truthy → enters `if posted_date` block → ISO parse fails → `elif job_id` is structurally unreachable → falls to LLM → DATE_UNKNOWN despite parseable date | Relative date parser inside `except ValueError` before giving up. Covers ES + EN, hours/days/weeks/months. |
 
 ---
 

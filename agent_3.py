@@ -160,20 +160,24 @@ def _parse_relative_date(text: str) -> Optional[int]:
 # --- 5. ORQUESTADOR (HÍBRIDO) ---
 def process_postings(raw_postings: List[RawPosting]) -> List[FilteredPosting]:
     today = datetime.now()
-    
+
+    print(f"\n[PRE-DEDUP] Total raw: {len(raw_postings)}")
+    for p in raw_postings:
+        print(f"  [RAW] '{p.title}' | source={p.source_type.value} | posted_date='{p.posted_date}'")
+
     # 1. Deduplicar
     unique_postings = deduplicate_jobs(raw_postings)
-    
+
     # 2. Calcular medianas de job_id de forma segura
     valid_job_ids = []
     for p in unique_postings:
         if p.job_id and p.job_id.isdigit():
             valid_job_ids.append(int(p.job_id))
-            
+
     median_job_id = median(valid_job_ids) if valid_job_ids else None
-    
+
     filtered_results = []
-    
+
     for posting in unique_postings:
         try:
             classification_val = None
