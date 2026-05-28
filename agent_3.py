@@ -37,6 +37,16 @@ _SOURCE_PRIORITY = {
     SourceType.BEBEE:        4,
 }
 
+def _posted_date_to_days(posted_date: Optional[str]) -> Optional[int]:
+    """ISO8601 o fecha relativa → días de antigüedad. None si no parseable."""
+    if not posted_date:
+        return None
+    try:
+        dt = datetime.fromisoformat(posted_date.replace("Z", "+00:00"))
+        return (datetime.now().date() - dt.date()).days
+    except ValueError:
+        return _parse_relative_date(posted_date)
+
 def deduplicate_jobs(raw_postings: List[RawPosting]) -> List[RawPosting]:
     print(f"Buscando duplicados en {len(raw_postings)} vacantes...")
     unique_map: Dict[str, RawPosting] = {}
@@ -47,10 +57,20 @@ def deduplicate_jobs(raw_postings: List[RawPosting]) -> List[RawPosting]:
         if key not in unique_map:
             unique_map[key] = posting
         else:
-            current_priority  = _SOURCE_PRIORITY.get(unique_map[key].source_type, 99)
-            incoming_priority = _SOURCE_PRIORITY.get(posting.source_type, 99)
-            if incoming_priority < current_priority:
+            current_days  = _posted_date_to_days(unique_map[key].posted_date)
+            incoming_days = _posted_date_to_days(posting.posted_date)
+            if incoming_days is not None and current_days is not None:
+                # Ambos tienen fecha parseable: gana el más fresco
+                if incoming_days < current_days:
+                    unique_map[key] = posting
+            elif incoming_days is not None and current_days is None:
+                # Solo el incoming tiene fecha: gana por más información
                 unique_map[key] = posting
+            elif incoming_days is None and current_days is None:
+                # Sin fecha en ninguno: fuente como tiebreaker
+                if _SOURCE_PRIORITY.get(posting.source_type, 99) < _SOURCE_PRIORITY.get(unique_map[key].source_type, 99):
+                    unique_map[key] = posting
+            # current tiene fecha, incoming no → se mantiene current (no hacer nada)
 
     deduplicated = list(unique_map.values())
     print(f"Deduplicación completada. Vacantes únicas: {len(deduplicated)}")
