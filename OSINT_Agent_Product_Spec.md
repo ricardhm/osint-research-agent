@@ -1,10 +1,10 @@
 # AGENT PRODUCT SPECIFICATION
 ## CR Tech Market OSINT Research Agent ("Inside Scoop Engine")
 
-**Version:** 0.3 — Post-Implementation Revision  
+**Version:** 0.4 — Post-Implementation Revision  
 **Author:** [Your Name]  
 **Date:** May 2026 — Revised 2026-05-27  
-**Status:** v0.3 — Agents 1–3 implemented; patches applied 2026-05-27 (see `POSTMORTEM_2026-05-27.md`, `POSTMORTEM_2026-05-27-dedup.md`)
+**Status:** v0.4 — Agents 1–3 implemented; patches applied 2026-05-27 (see `POSTMORTEM_2026-05-27.md`, `POSTMORTEM_2026-05-27-dedup.md`)
 
 ---
 
@@ -187,7 +187,7 @@ OUTPUT: Structured JSON payload → Human authors Insights section
   "title": "string",
   "department": "string | null",
   "location": "string",
-  "posted_date": "ISO8601 | null",
+  "posted_date": "ISO8601 | relative_date_string | null",
   "job_id": "string | null",
   "url": "string",
   "description_snippet": "string (first 500 chars)",
@@ -198,7 +198,7 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 
 **Hard constraints:**
 - Never merge two postings into one record
-- If posted_date is not parseable, set to null — do NOT estimate
+- `posted_date` rules: if a relative date string is visible ("2 days ago", "hace 3 días", "1 week ago"), copy it **exactly as-is** — do NOT convert to ISO8601. Only use ISO8601 if an absolute date is explicitly present. If no date is visible, use `null`.
 - job_id must be extracted exactly as it appears in the URL or posting metadata
 
 **Edge cases:**
@@ -219,7 +219,7 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 2. If `posted_date` is null or unparseable: examine `job_id` for sequential numbering. If `job_id` is ≥15% below the median `job_id` across all postings from same source, classify as `STALE` (`StaleSignal.JOB_ID_SEQUENCE`)
 3. If no date signal and no conclusive `job_id`: LLM fallback — semantic analysis of `description_snippet`. Emits `[LLM_DECISION]` or `[PYDANTIC_FALLBACK]` log line.
 
-**Deduplication (pre-classification):** runs before the cascade on the full raw posting list. Key is `_normalize_key(title)` — NFKD-decomposed, lowercase, combining characters stripped. Location is excluded from the key: each source formats location differently and it is not a stable cross-source axis. Tiebreaker: `careers_page(0) > builtin(1) > indeed_cr(2) > linkedin(3) > bebee(4)` — lower priority index replaces higher.
+**Deduplication (pre-classification):** runs before the cascade on the full raw posting list. Key is `_normalize_key(title)` — NFKD-decomposed, lowercase, combining characters stripped. Location is excluded from the key: each source formats location differently and it is not a stable cross-source axis. Tiebreaker (freshness-first): compare `_posted_date_to_days()` on both candidates (ISO8601 or relative string → days ago); fresher wins. If only one has a parseable date, that one wins. If neither has a date, fall back to source priority: `careers_page(0) > builtin(1) > indeed_cr(2) > linkedin(3) > bebee(4)`.
 
 **Output per posting:** original record + `{ "age_classification": "ACTIVE | BORDERLINE | STALE | DATE_UNKNOWN", "stale_signal": "date | job_id_sequence | none", "archive_flag": "boolean" }`
 
@@ -402,6 +402,8 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 | **Forced tool_choice blocking** | **Yes — confirmed in v0.1** | Agent 1 (URL Discovery) | `tool_choice` with a specific tool name prevents any other tool from running; model fills the forced tool with prior knowledge; hallucinated URLs pass schema validation and reach Agent 2 where they yield zero postings | Two-step call pattern: `web_search` in Step 1 with no `tool_choice`, `record_urls` forced in Step 2 with Step 1 text as context. Never place a search prerequisite and its downstream recorder in the same call with a forced `tool_choice` name |
 | **Cross-source location format variance** | **Yes — confirmed in v0.1** | Agent 3 (Stale Filter) — dedup stage | Same job appears N times (one per source) because location field format differs per job board; `title\|location` key never collides; inflated posting count drives false hiring velocity signal in Agent 5 | Dedup key must be title-only (NFKD-normalized). Location is not a stable cross-source axis. |
 | **Non-ISO date string bypasses deterministic path** | **Yes — confirmed in v0.1** | Agent 3 (Stale Filter) — date parse stage | `posted_date = "hace 3 días"` is truthy → enters `if posted_date` block → ISO parse fails → `elif job_id` is structurally unreachable → falls to LLM → DATE_UNKNOWN despite parseable date | Relative date parser inside `except ValueError` before giving up. Covers ES + EN, hours/days/weeks/months. |
+| **Dedup source-priority tiebreaker discards fresher postings** | **Yes — confirmed in v0.3** | Agent 3 (Stale Filter) — dedup tiebreaker | Fixed source priority (`careers_page` always wins) eliminates a fresh `indeed_cr` posting ("2 days ago") in favour of a stale `careers_page` posting with an old ISO date → downstream classifies as STALE | Freshness-first tiebreaker: compare `_posted_date_to_days()` on both candidates; fall back to source priority only when neither has a parseable date. Requires Agent 2 to preserve relative date strings verbatim (not convert to ISO8601). |
+| **Extractor silently converts relative dates to ISO8601** | **Yes — confirmed in v0.3** | Agent 2 (Posting Scraper) — LLM extraction | LLM in `extract_postings_from_text` infers an absolute date from a relative string ("2 days ago" → "2026-05-25"), producing a plausible-but-hallucinated ISO date that passes validation; Agent 3 ISO parser succeeds but the date is wrong | Explicit REGLA CRÍTICA in system prompt: copy relative date strings exactly; only emit ISO8601 for explicitly visible absolute dates; null otherwise. |
 
 ---
 
