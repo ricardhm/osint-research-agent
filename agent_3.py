@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import unicodedata
 import anthropic
 from dotenv import load_dotenv
 from datetime import datetime
@@ -22,21 +24,34 @@ class LLMFreshnessOutput(BaseModel):
     archive_flag: bool
 
 # --- 2. DEDUPLICACIÓN DETERMINISTA ---
+def _normalize_key(text: str) -> str:
+    """Lowercase + elimina diacríticos. 'San José' == 'San Jose'."""
+    nfkd = unicodedata.normalize('NFKD', text.strip().lower())
+    return ''.join(c for c in nfkd if not unicodedata.combining(c))
+
+_SOURCE_PRIORITY = {
+    SourceType.CAREERS_PAGE: 0,
+    SourceType.BUILTIN:      1,
+    SourceType.INDEED_CR:    2,
+    SourceType.LINKEDIN:     3,
+    SourceType.BEBEE:        4,
+}
+
 def deduplicate_jobs(raw_postings: List[RawPosting]) -> List[RawPosting]:
     print(f"Buscando duplicados en {len(raw_postings)} vacantes...")
     unique_map: Dict[str, RawPosting] = {}
-    
+
     for posting in raw_postings:
-        # Clave de normalización: titulo + locación en minúsculas y sin espacios extra
-        key = f"{posting.title.strip().lower()}|{posting.location.strip().lower()}"
-        
+        key = _normalize_key(posting.title)
+
         if key not in unique_map:
             unique_map[key] = posting
         else:
-            # Si hay colisión, preferimos la fuente primaria (Careers Page)
-            if posting.source_type == SourceType.CAREERS_PAGE and unique_map[key].source_type != SourceType.CAREERS_PAGE:
+            current_priority  = _SOURCE_PRIORITY.get(unique_map[key].source_type, 99)
+            incoming_priority = _SOURCE_PRIORITY.get(posting.source_type, 99)
+            if incoming_priority < current_priority:
                 unique_map[key] = posting
-                
+
     deduplicated = list(unique_map.values())
     print(f"Deduplicación completada. Vacantes únicas: {len(deduplicated)}")
     return deduplicated
@@ -91,7 +106,38 @@ def evaluate_job_freshness_with_llm(posting: RawPosting) -> LLMFreshnessOutput:
                 
     raise ValueError("El LLM no devolvió la estructura requerida.")
 
-# --- 4. ORQUESTADOR (HÍBRIDO) ---
+# --- 4. PARSER DE FECHAS RELATIVAS ---
+_RELATIVE_PATTERNS = [
+    (re.compile(r'hace\s+(\d+)\s+hora[s]?', re.IGNORECASE), 'hours'),
+    (re.compile(r'hace\s+(\d+)\s+d[ií]a[s]?', re.IGNORECASE), 'days'),
+    (re.compile(r'hace\s+(\d+)\s+semana[s]?', re.IGNORECASE), 'weeks'),
+    (re.compile(r'hace\s+(\d+)\s+mes(?:es)?', re.IGNORECASE), 'months'),
+    (re.compile(r'(\d+)\s+hour[s]?\s+ago', re.IGNORECASE), 'hours'),
+    (re.compile(r'(\d+)\s+day[s]?\s+ago', re.IGNORECASE), 'days'),
+    (re.compile(r'(\d+)\s+week[s]?\s+ago', re.IGNORECASE), 'weeks'),
+    (re.compile(r'(\d+)\s+month[s]?\s+ago', re.IGNORECASE), 'months'),
+    (re.compile(r'just\s+now|moments?\s+ago|ahora\s*(?:mismo)?|recién', re.IGNORECASE), 'now'),
+]
+
+def _parse_relative_date(text: str) -> Optional[int]:
+    """Retorna antigüedad en días si el texto es una fecha relativa, None si no aplica."""
+    for pattern, unit in _RELATIVE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            if unit == 'now':
+                return 0
+            n = int(match.group(1))
+            if unit == 'hours':
+                return 0
+            if unit == 'days':
+                return n
+            if unit == 'weeks':
+                return n * 7
+            if unit == 'months':
+                return n * 30
+    return None
+
+# --- 5. ORQUESTADOR (HÍBRIDO) ---
 def process_postings(raw_postings: List[RawPosting]) -> List[FilteredPosting]:
     today = datetime.now()
     
@@ -129,8 +175,16 @@ def process_postings(raw_postings: List[RawPosting]) -> List[FilteredPosting]:
                     stale_signal_val = StaleSignal.DATE
                     
                 except ValueError:
-                    # Si el formato ISO falla, caemos al LLM
-                    pass
+                    relative_days = _parse_relative_date(posting.posted_date)
+                    if relative_days is not None:
+                        print(f"  [RELATIVE_DATE] '{posting.title}' → '{posting.posted_date}' = {relative_days}d")
+                        if relative_days < 90:
+                            classification_val = AgeClassification.ACTIVE
+                        elif relative_days < 120:
+                            classification_val = AgeClassification.BORDERLINE
+                        else:
+                            classification_val = AgeClassification.STALE
+                        stale_signal_val = StaleSignal.DATE
             
             elif posting.job_id and posting.job_id.isdigit() and median_job_id:
                 if int(posting.job_id) < median_job_id * 0.85:
