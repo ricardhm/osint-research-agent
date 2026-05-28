@@ -98,7 +98,7 @@ def save_pipeline_state(state: OSINTPipelineState):
 
 
 if __name__ == "__main__":
-    target = "Akamai"
+    target = "Experian"
     
     # Ejecutamos el pipeline y obtenemos el estado final
     final_state = run_osint_pipeline(target)

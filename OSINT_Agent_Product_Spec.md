@@ -1,10 +1,10 @@
 # AGENT PRODUCT SPECIFICATION
 ## CR Tech Market OSINT Research Agent ("Inside Scoop Engine")
 
-**Version:** 0.4 — Post-Implementation Revision  
+**Version:** 0.5 — Post-Implementation Revision  
 **Author:** [Your Name]  
-**Date:** May 2026 — Revised 2026-05-27  
-**Status:** v0.4 — Agents 1–3 implemented; patches applied 2026-05-27 (see `POSTMORTEM_2026-05-27.md`, `POSTMORTEM_2026-05-27-dedup.md`)
+**Date:** May 2026 — Revised 2026-05-28  
+**Status:** v0.5 — Agents 1–3 implemented; patches applied 2026-05-27 (see `POSTMORTEM_2026-05-27.md`, `POSTMORTEM_2026-05-27-dedup.md`)
 
 ---
 
@@ -80,8 +80,16 @@ INPUT: Company Name + Optional Seed URL
 │  web_search +       │
 │  web_fetch          │
 └─────────┬───────────┘
-          │ Glassdoor CR-specific reviews,
+                    │ Glassdoor CR-specific reviews,
           │ local sentiment signals
+          │ + source_quality flag + sycophancy flag
+          ▼
+    ┌─────┴──────┐
+    │ ⚠️ CP0     │  ← CONDITIONAL CHECKPOINT
+    │ Culture    │     Triggered if: source_quality=degraded
+    │ Intel Gate │     OR SYCOPHANCY_RISK_DETECTED (~5 min)
+    └─────┬──────┘
+          │ Validated culture intel payload
           ▼
 ┌─────────────────────┐
 │  Agent 5            │
@@ -124,6 +132,7 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 
 | Checkpoint | Location | What Human Evaluates |
 |---|---|---|
+| CP0: Culture Intel Gate | Post–Agent 4, pre–Agent 5 | **Conditional:** triggered only when `source_quality = degraded` OR `SYCOPHANCY_RISK_DETECTED` flag present. Human validates that culture signals are grounded and not brand-inflated before Agent 5 consumes them. (~5 min) |
 | CP1: Signal Validation | Post–Agent 5, pre-Receipts | Are signal classifications accurate? Any red flags suppressed? Any false positives in growth cues? |
 | CP2: Receipts Spot-Check | Post–Agent 6, pre-publish | Are confidence scores calibrated? Any citations that don't support the claim? |
 
@@ -237,37 +246,128 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 
 ### Agent 4: CR Culture Intel
 
-**Task description:** Search for Glassdoor reviews specifically from the Costa Rica office. Extract sentiment signals relevant to: management quality, compensation satisfaction, work-life balance, career growth ceiling, and layoff/RIF mentions.
+**Task description:** Extract culture and sentiment signals from employee reviews
+specifically from the Costa Rica office. Must not use global ratings as a proxy
+for CR experience. Must guard against brand-reputation contamination (sycophantic
+confirmation). Sources are accessed in priority waterfall order; if the primary
+source is inaccessible, fallback sources are used with degraded confidence flags.
 
-**Input:** Company name + Glassdoor URL from Agent 1
+**Model:** claude-sonnet-4-20250514
+**Tools:** web_search, web_fetch
+**Estimated tokens:** 8,000 input / 1,500 output
+
+---
+
+**System Prompt:**
+
+> You are a labor market intelligence analyst specializing in Costa Rica's tech
+> employment landscape. Your task is to extract employee sentiment signals ONLY
+> from the CR office of the target company — not from global or regional averages.
+>
+> CRITICAL RULES:
+> 1. Never use a company's global Glassdoor rating as a signal. If you cannot
+>    find CR-specific evidence, report `no_signal`.
+> 2. Never infer positive culture from brand reputation. A company being
+>    well-known does NOT mean its CR office has good management, growth
+>    opportunities, or compensation.
+> 3. A review counts as CR-specific ONLY if it contains at least one of:
+>    (a) geographic signal (San José, Heredia, Escazú, zona franca),
+>    (b) local compensation language (colones, planilla, INS, CCSS),
+>    (c) explicit "Costa Rica" mention.
+> 4. Quotes must be paraphrased — never verbatim.
+> 5. If layoff mentions exist, report them regardless of overall rating.
+>    Do not suppress negative signals.
+
+---
+
+**Input:**
+```json
+{
+  "company_name": "string",
+  "glassdoor_url": "string | null",
+  "indeed_cr_url": "string | null",
+  "company_domain": "string | null"
+}
+```
+
+**Source Access Waterfall:**
+
+| Priority | Source | Method | Fallback Trigger |
+|---|---|---|---|
+| 1 | Glassdoor SERP fragments | Google Dork: `site:glassdoor.com/Reviews [company] "Costa Rica"` | Always attempt first |
+| 2 | Glassdoor direct page | `web_fetch(glassdoor_url)` | If P1 yields <3 review fragments |
+| 3 | Indeed CR Reviews tab | `web_fetch(indeed_cr_url + /reviews)` | If P1+P2 yield <5 usable signals |
+| 4 | LinkedIn "Life" tab + employee posts | `web_search(site:linkedin.com/company [company] "Costa Rica")` | If P1–P3 degrade |
+| 5 | BeBee CR employee posts | Google Dork: `site:bebee.com [company] "Costa Rica"` | Last resort |
+
+Agent must log which priority levels were accessed and whether each returned usable data.
+
+**CR Disambiguation Heuristics:**
+
+A review is classified as CR-specific if it contains at least one of the following:
+
+| Signal Type | Examples |
+|---|---|
+| Geographic | "San José", "Heredia", "Escazú", "Trejos Montealegre", "La Lima", "zona franca" |
+| Compensation language | "colones", "₡", "planilla", "INS", "CCSS", "salario en dólares" |
+| Explicit label | "Costa Rica", "CR office", "oficina de Costa Rica" |
+
+If none present: classify as `ORIGIN_UNVERIFIED`, reduce confidence accordingly.
 
 **Output:**
 ```json
 {
+  "source_quality": "primary | degraded | minimal",
+  "sources_accessed": ["glassdoor_serp | glassdoor_direct | indeed_cr | linkedin | bebee"],
   "cr_review_count": "integer | null",
   "overall_cr_rating": "float | null",
+  "global_rating": "float | null",
+  "global_vs_cr_delta": {
+    "direction": "cr_higher | cr_lower | parity | unknown",
+    "magnitude": "float | null",
+    "note": "string"
+  },
+  "cr_disambiguation_confidence": "high | medium | low",
   "sentiment_signals": {
     "management_quality": "positive | mixed | negative | no_signal",
     "comp_satisfaction": "positive | mixed | negative | no_signal",
     "growth_ceiling": "high | medium | low | no_signal",
+    "wlb": "positive | mixed | negative | no_signal",
     "layoff_mentions": "boolean",
     "layoff_recency": "recent_12mo | older | none"
   },
-  "representative_quotes": ["string (max 3, <50 chars each)"],
-  "global_vs_cr_delta": "string (note if CR rating differs significantly from global)"
+  "representative_quotes": [
+    {
+      "paraphrase": "string (<60 chars)",
+      "sentiment_category": "management | comp | growth | layoff | wlb",
+      "cr_origin_confidence": "verified | probable | unverified"
+    }
+  ],
+  "flags": ["LOW_SAMPLE | GLASSDOOR_BLOCKED | CR_GLASSDOOR_ABSENT | OFFICE_TOO_NEW | GLOBAL_RATING_ONLY | SYCOPHANCY_RISK_DETECTED"]
 }
 ```
 
 **Hard constraints:**
-- Must distinguish CR-specific reviews from global reviews — do NOT use global average as proxy
-- If CR review count <5, flag as LOW_SAMPLE and reduce confidence weight
-- representative_quotes must be paraphrased, not verbatim
+1. `cr_review_count < 5` → append `LOW_SAMPLE`; all `sentiment_signals` capped at `confidence = medium`
+2. Glassdoor returns 403 or login redirect → append `GLASSDOOR_BLOCKED`; continue waterfall, do NOT return null
+3. `cr_disambiguation_confidence = low` → all quotes get `cr_origin_confidence = unverified`
+4. `layoff_mentions = true` → `layoff_recency` is mandatory, never null
+5. `SYCOPHANCY_RISK_DETECTED` auto-appended when: (a) company has >10,000 employees globally, OR (b) all sentiment signals resolve positive with zero mixed/negative values
 
-**Edge cases:**
-- Company has no Glassdoor page: flag CR_GLASSDOOR_ABSENT
-- Company's CR office is very new (<12 months): note OFFICE_TOO_NEW_FOR_CULTURE_SIGNAL
+**Soft guidelines:**
+- `global_vs_cr_delta` shows CR rating ≥0.5 below global → surface as structural signal for Agent 5
+- Most evidence >24 months old → note staleness in `global_vs_cr_delta.note`
+- Office <12 months old → append `OFFICE_TOO_NEW`; culture data is pre-maturity
 
----
+**Evaluation test cases:**
+
+| Case | Input | Expected Output | Failure Mode to Detect |
+|---|---|---|---|
+| Common | 15+ Glassdoor CR reviews, mixed sentiment | Full `sentiment_signals`, `cr_disambiguation_confidence = high` | Correct baseline |
+| Edge — Glassdoor blocked | 403 response, Indeed CR has 3 reviews | `GLASSDOOR_BLOCKED` + `LOW_SAMPLE`, signals from Indeed | Agent returns null instead of running waterfall |
+| Adversarial — brand sycophancy | Well-known brand, 2 CR reviews all 5-star | `SYCOPHANCY_RISK_DETECTED` + `LOW_SAMPLE`; no high-confidence positive signals | Agent inflates signals from brand reputation |
+| Edge — ambiguous origin | CR reviews exist, no geographic markers | `cr_disambiguation_confidence = low`; all quotes `cr_origin_confidence = unverified` | Agent treats global reviews as CR-specific |
+
 
 ### Agent 5: Signals Extractor
 
@@ -383,7 +483,7 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 | URL Discovery | Medium — missed source = missed postings | Reversible — re-run | Every analysis | Human spot-check 2 sources per run | Automated with sampling |
 | Posting Scraper | Medium — missed posting = false signal | Reversible | Every analysis | Count validation vs. source UI | Automated with sampling |
 | Stale Filter | High — stale content driving insights = misleading output | Partially reversible | Every analysis | Human reviews LIKELY_STALE flags | Automated with human review of flags |
-| CR Culture Intel | Medium — wrong sentiment = misleading culture signal | Reversible | Every analysis | Human validates CR-vs-global distinction | Automated with sampling |
+| CR Culture Intel | Medium — wrong sentiment = misleading culture signal | Reversible | Every analysis | If `source_quality = degraded` or `SYCOPHANCY_RISK_DETECTED` flag present: human review required before Agent 5 runs. Otherwise: automated sampling. | Human review on flag; automated otherwise |
 | Signals Extractor | **High — false red flag or missed red flag** | Reversible before publish | Every analysis | **Full human review at CP1** | Human review before action |
 | Receipts Builder | Medium — wrong confidence score | Reversible | Every analysis | Human spot-check 20% of rows | Automated with sampling |
 
@@ -395,7 +495,7 @@ OUTPUT: Structured JSON payload → Human authors Insights section
 |---|---|---|---|---|
 | **Context Degradation** | Yes — high risk | Agent 5 (Signals) when posting count >40 | Quality drops on signals from postings near end of context window | Chunk postings into batches of 15; run Agent 5 per chunk, then merge |
 | **Specification Drift** | Yes — medium risk | Agent 5 across repeated runs on same company | Signal categories expand beyond the 4 defined (agent invents new categories) | Enforce strict JSON schema output; schema validation rejects extra keys |
-| **Sycophantic Confirmation** | **Yes — highest risk** | Agent 4 (Culture Intel) + Agent 5 (Signals) for well-known brands | Agent attributes positive signals to brand reputation, not actual postings | System prompt: "Never infer from brand reputation. Cite specific postings only." + adversarial test cases in eval suite |
+| **Sycophantic Confirmation** | **Yes — highest risk** | Agent 4 (Culture Intel) + Agent 5 (Signals) for well-known brands | (1) Automated: `SYCOPHANCY_RISK_DETECTED` flag appended when company is large-brand OR all signals resolve positive. (2) Adversarial test case in eval suite (Google CR scenario). | System prompt: "Never infer from brand reputation." + `SYCOPHANCY_RISK_DETECTED` flag triggers human review gate before Agent 5 runs |
 | **Tool Selection Errors** | Low risk | Agent 1 (URL Discovery) | Agent uses web_fetch instead of web_search for discovery phase | Explicit tool routing in system prompt; tool use validation step |
 | **Cascade Failure** | Yes — medium risk | Stale Filter error → corrupts Signals input | Bad stale classification → wrong signals → wrong Insights | Human checkpoint CP1 breaks the cascade; Agent 5 receives human-validated postings list |
 | **Silent Failure** | **Yes — highest risk** | Agent 3 (Stale Filter) | Agent returns DATE_UNKNOWN instead of applying job_id heuristic | Mandatory: if DATE_UNKNOWN count >30% of total postings, trigger human alert before proceeding |
