@@ -5,7 +5,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 
 # Importamos nuestros contratos y funciones del agente
 from models import RawPosting, SourceType
-from agent_2 import extract_postings_from_text, scrape_with_firecrawl, scrape_with_playwright
+from agents.agent_2_posting_fetch import extract_postings_from_text, scrape_with_firecrawl, scrape_with_playwright
 
 # --- FIXTURES ---
 

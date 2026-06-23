@@ -1,0 +1,105 @@
+{
+    "company": "Akamai",
+    "inside_scoop": {
+        "growth_cues": [
+            {
+                "signal": "Dual seniority coverage in DevOps/DevSecOps engineering suggests functional expansion",
+                "evidence": "\"Senior DevOps Engineer\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica AND \"Sr. DevSecOps Engineer\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica: two distinct senior-level engineering roles open simultaneously in overlapping DevOps/security-engineering space, satisfying (a) DevSecOps is a newer hybrid role type and (b) multiple seniority-adjacent levels in the same function.",
+                "confidence": "medium"
+            },
+            {
+                "signal": "Principal-level and architect-level engineering roles signal senior-layer buildout across security/software functions",
+                "evidence": "\"Principal Software Engineer\" \u2014 https://builtin.com/job/ecommerce-tech-lead/8919913 AND \"Security Architect\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica AND \"Solutions Architect II\" \u2014 https://builtin.com/job/solutions-architect-ii/8735183: three senior/principal/architect-grade technical roles across distinct functions (software, security, cloud solutions), satisfying (a) new role types in the CR roster and (c) architect-grade = near-director seniority in engineering hierarchy.",
+                "confidence": "medium"
+            }
+        ],
+        "ambiguous_cues": [
+            {
+                "signal": "Single Product Support Engineer opening \u2014 could be backfill for attrition in a high-turnover support function",
+                "evidence": "\"Product Support Engineer\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica: one isolated opening in an established support function with no additional seniority levels or management role posted alongside it.",
+                "confidence": "medium",
+                "ambiguity_reason": "possible replacement hiring"
+            },
+            {
+                "signal": "Single Global Equity Specialist II opening in Finance \u2014 isolated mid-level role with no adjacent Finance postings",
+                "evidence": "\"Global Equity Specialist II\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica: one mid-level finance/equity role with no junior or senior companion postings and no finance manager role, failing the 2-of-3 growth threshold.",
+                "confidence": "medium",
+                "ambiguity_reason": "possible replacement hiring"
+            },
+            {
+                "signal": "Intern - Sales Enablement opening is isolated and low-seniority \u2014 unclear if it signals sales function growth or a routine intern rotation",
+                "evidence": "\"Intern - Sales Enablement\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica: single intern-level sales posting with no accompanying full-time sales roles or sales management postings in this CR chunk.",
+                "confidence": "low",
+                "ambiguity_reason": "intern postings routinely cycle regardless of headcount growth; insufficient evidence to confirm expansion"
+            },
+            {
+                "signal": "Site Reliability Engineer II is a single mid-level SRE opening \u2014 no senior SRE or SRE manager posted alongside",
+                "evidence": "\"Site Reliability Engineer II\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica: one mid-level SRE role with no companion seniority levels or EM/manager posting, meeting only 1-of-3 growth criteria (role type present in engineering roster).",
+                "confidence": "medium",
+                "ambiguity_reason": "possible replacement hiring"
+            }
+        ],
+        "stability_cues": [
+            {
+                "signal": "CR site rating matches global rating at 4.3, indicating the Costa Rica office is not an underperforming outlier",
+                "evidence": "CR culture intel: cr_reviews=69, rating=4.3, delta=parity \u2014 CR and global ratings are equal at 4.3, suggesting the local office maintains comparable employee sentiment to headquarters.",
+                "confidence": "medium"
+            },
+            {
+                "signal": "Positive work-life balance signal from CR employee reviews",
+                "evidence": "CR culture intel: wlb=positive \u2014 local reviewer sentiment on WLB is consistently favorable, supporting day-to-day environment stability for CR-based employees.",
+                "confidence": "medium"
+            },
+            {
+                "signal": "Multi-department technical hiring spread across DevOps, SRE, Security, and Software Engineering suggests an established, multi-function engineering presence in CR",
+                "evidence": "\"Senior DevOps Engineer\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica; \"Site Reliability Engineer II\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica; \"Security Architect\" \u2014 https://www.linkedin.com/jobs/search/?keywords=Akamai&location=Costa%20Rica; \"Principal Software Engineer\" \u2014 https://builtin.com/job/ecommerce-tech-lead/8919913: four distinct engineering disciplines actively hiring from the CR site.",
+                "confidence": "medium"
+            }
+        ],
+        "red_flags": [
+            {
+                "signal": "Confirmed layoffs within the last 12 months with employee-reported sense of recurring instability",
+                "evidence": "CR culture intel: layoffs=True, recency=recent_12mo. Direct quote: \"Sense of instability from layoffs twice in ~12 months\" \u2014 corroborated across multiple CR reviewer fragments.",
+                "confidence": "high"
+            },
+            {
+                "signal": "Negative management signals: multiple leadership changes and closed-door culture reported by CR reviewers",
+                "evidence": "CR culture intel: management=mixed. Direct quotes: \"CR salaries below market; multiple mgmt changes same year\" and \"Management was the worst; no open-door policy\" \u2014 sourced from CR-specific review fragments.",
+                "confidence": "medium"
+            },
+            {
+                "signal": "Compensation flagged as below local market by CR employees, with comp sub-rating trailing even the modest global benchmark",
+                "evidence": "CR culture intel: comp=mixed, comp sub-rating for CR (4.0\u20134.1) trails global (4.0\u20134.2). Direct quote: \"CR salaries below market\" \u2014 indicates a localized comp disadvantage relevant to Costa Rica candidates evaluating offers.",
+                "confidence": "medium"
+            }
+        ],
+        "red_flags_note": "Layoff recency (confirmed within 12 months, reportedly occurring twice) is the dominant risk signal. Combined with mixed management ratings and below-market comp feedback from CR reviewers, candidates should pressure-test role stability and compensation benchmarks before accepting an offer.",
+        "org_focus": "engineering_hub",
+        "org_focus_justification": "6 of 9 active postings are in engineering or technical architecture functions (Senior DevOps Engineer, Sr. DevSecOps Engineer, Site Reliability Engineer II, Security Architect, Solutions Architect II, Principal Software Engineer), with the remaining 3 spread across Support, Sales, and Finance.",
+        "career_ceiling": "product_engineering_present",
+        "role_clusters": [
+            {
+                "cluster_name": "Engineering & Architecture (DevOps / SRE / Security / Software)",
+                "posting_count": 6,
+                "seniority_skew": "senior"
+            },
+            {
+                "cluster_name": "Technical Support",
+                "posting_count": 1,
+                "seniority_skew": "mid"
+            },
+            {
+                "cluster_name": "Sales",
+                "posting_count": 1,
+                "seniority_skew": "junior"
+            },
+            {
+                "cluster_name": "Finance / Equity",
+                "posting_count": 1,
+                "seniority_skew": "mid"
+            }
+        ],
+        "pay_transparency_signal": "absent",
+        "hiring_velocity": "medium"
+    }
+}

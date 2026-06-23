@@ -8,11 +8,11 @@ from models import (
     CRCultureIntelOutput, InsideScoopOutput,
 )
 
-from agent_1 import agent_1_discover
-from agent_2 import run_scraper
-from agent_3 import process_postings
-from agent_4 import run_agent_4
-from agent5  import run_agent_5
+from agents.agent_1_url_discovery import agent_1_discover
+from agents.agent_2_posting_fetch import run_scraper
+from agents.agent_3_dedup_filter import process_postings
+from agents.agent_4_culture_intel import run_agent_4
+from agents.agent_5_signals import run_agent_5
 
 
 # --- 1. CONTRATO DE ESTADO DEL PIPELINE ---
@@ -127,7 +127,7 @@ def save_pipeline_state(state: OSINTPipelineState):
 
 
 if __name__ == "__main__":
-    target = "Workday"
+    target = "Workday" 
 
     final_state = run_osint_pipeline(target)
 

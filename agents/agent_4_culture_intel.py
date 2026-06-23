@@ -7,7 +7,7 @@ import anthropic
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from agent4_prompt import AGENT4_SYSTEM_PROMPT, build_agent4_user_prompt
+from agents.agent4_prompt import AGENT4_SYSTEM_PROMPT, build_agent4_user_prompt
 from models import CRCultureIntelOutput
 
 load_dotenv()
