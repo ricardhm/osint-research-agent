@@ -1,3 +1,4 @@
+import argparse
 import os
 import json
 from typing import List, Optional
@@ -127,8 +128,12 @@ def save_pipeline_state(state: OSINTPipelineState):
 
 
 if __name__ == "__main__":
-    target = "Workday" 
+    parser = argparse.ArgumentParser(description="Inside Scoop OSINT Pipeline")
+    parser.add_argument("--company", required=True, help="Company name to analyze")
+    parser.add_argument("--location", default="Costa Rica", help="Location filter (default: Costa Rica)")
+    args = parser.parse_args()
 
+    target = args.company
     final_state = run_osint_pipeline(target)
 
     if final_state.status == "COMPLETED":
