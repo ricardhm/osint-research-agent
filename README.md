@@ -166,15 +166,15 @@ Agent 5 (Signal Classification)
    ↓
    CP1 (human review of signals)
    ↓
-Agent 6 (Markdown Output)
+Agent 6 (Markdown Output) ← planned M3
 ```
 
 **State contract:** All agents read and write `OSINTPipelineState` — a Pydantic v2 model that defines the inter-agent boundary. Schema-first by design.
 
 **Stack:**
 
-- Python 3.11
-- Anthropic SDK (Claude Sonnet 4.5)
+- Python 3.14
+- Anthropic SDK (Claude Haiku 4.5 for extraction, Sonnet 4.5 for intel)
 - Pydantic v2 for inter-agent contracts and structured outputs
 - Firecrawl + Playwright for web data
 - SQLite + JSON for state persistence
@@ -185,7 +185,7 @@ Agent 6 (Markdown Output)
 
 ```bash
 # Clone
-git clone github.com/ricardhm/osint-research-agent
+git clone https://github.com/ricardhm/osint-research-agent
 cd osint-research-agent
 
 # Setup
@@ -249,6 +249,7 @@ Every gap below ships an artifact. The artifact is the deliverable, not the code
 - **Agent 5 ambiguous-cue bloat.** Four variants of "single posting = backfill?". Needs prompt refinement to consolidate.
 - **Agent 5 `career_ceiling` over-escalation.** Enum mapping logic needs a calibration pass.
 - **Agent 2 Pydantic validation errors** on LinkedIn and Indeed CR sources. Workaround in place; root-cause fix deferred to M3.
+- **`--location` flag not yet wired.** Pipeline is currently Costa Rica–only. Multi-market support requires parameterizing Agent 1 URL generation and Agent 2 routing.
 
 ### Production-hardening gaps (M4 scope) — each ships an artifact
 
@@ -286,5 +287,5 @@ If you're hiring for production agentic work, the post-mortems, the schemas, and
 ---
 
 **Contact:** https://www.linkedin.com/in/ricardohm/
-**LinkedIn post for M2:** [link]
-**Built with:** Claude Sonnet 4.5 as cost saving measure, Pydantic v2, and a strict no-peek protocol between human and agent.
+**M2 post:** [Human vs. Agent on Akamai CR](https://www.linkedin.com/posts/ricardohm_agenticai-buildinpublic-productionai-share-7476053294382129152-c6rZ)
+**Built with:** Claude Haiku/Sonnet 4.5, Pydantic v2, and a strict no-peek protocol between human and agent.

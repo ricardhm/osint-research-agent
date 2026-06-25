@@ -1,18 +1,10 @@
 # Inside Scoop Manual Analysis — Akamai CR
 
-**Date:** 2026-05-XX
+**Date:** 2026-06-20
 **Analyst:** Ric Hernández
 **Time cap:** 90 min total / 10 min per signal section
 **Posting universe:** 9 active CR postings (May snapshot)
 **Culture intel source:** 69 CR-specific Glassdoor reviews
-
-**A six-agent OSINT pipeline that analyzes tech companies in Costa Rica as employers.**
-
-Discovers active postings → fetches → dedupes → pulls CR-specific Glassdoor culture intel → classifies signals → outputs an Inside Scoop report.
-
-Built in Python with Anthropic SDK, Pydantic v2, and a strict spec-driven inter-agent contract.
-
-→ Read the milestone post: [link to LinkedIn post]
 
 ---
 
@@ -22,7 +14,7 @@ Built in Python with Anthropic SDK, Pydantic v2, and a strict spec-driven inter-
 
 Before trusting the pipeline on a company I'd never analyzed, I ran Agent 5 against three companies I'd already analyzed by hand: **Akamai CR, Lumenalta, Workday CR.**
 
-This README documents the first comparison. Lumenalta and Workday CR follow.
+This document documents the first comparison. Lumenalta and Workday CR follow.
 
 ### Protocol
 
@@ -153,120 +145,3 @@ If a field doesn't exist in the output template, the insight doesn't survive the
 Base-rate priors are still a human edge.
 
 ---
-
-## Architecture
-
-```
-Agent 1 (URL Discovery)
-   ↓
-Agent 2 (Job Posting Fetch)
-   ↓
-Agent 3 (Dedup + Filter)
-   ↓
-Agent 4 (CR Culture Intel)
-   ↓
-   CP0 (conditional human checkpoint)
-   ↓
-Agent 5 (Signal Classification)
-   ↓
-   CP1 (human review of signals)
-   ↓
-Agent 6 (Markdown Output)
-```
-
-**State contract:** All agents read and write `OSINTPipelineState` — a Pydantic v2 model that defines the inter-agent boundary. Schema-first by design.
-
-**Stack:**
-
-- Python 3.11
-- Anthropic SDK (Claude Sonnet 4.5)
-- Pydantic v2 for inter-agent contracts and structured outputs
-- Firecrawl + Playwright for web data
-- SQLite + JSON for state persistence
-
----
-
-## Run It Yourself
-
-```bash
-# Clone
-git clone github.com/ricardhm/osint-research-agent
-cd osint-research-agent
-
-# Setup
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# Configure
-cp .env.example .env
-# Add your ANTHROPIC_API_KEY
-
-# Run pipeline on a target company
-python main.py --company "Akamai" --location "Costa Rica"
-```
-
----
-
-## Repository Structure
-
-```
-osint-research-agent/
-├── agents/
-│   ├── agent_1_url_discovery.py
-│   ├── agent_2_posting_fetch.py
-│   ├── agent_3_dedup_filter.py
-│   ├── agent_4_culture_intel.py
-│   ├── agent_5_signals.py
-│   └── agent_6_output.py
-├── models.py                          # OSINTPipelineState, Pydantic schemas
-├── main.py                            # Orchestrator
-├── outputs/
-│   └── akamai_inside_scoop.json       # Agent 5 output
-├── manual_analyses/
-│   ├── manual_analysis_template.md
-│   └── manual_analysis_akamai_cr.md   # My 60-minute manual run
-└── docs/
-    ├── OSINT_Agent_Product_Spec.md
-    └── post_mortems/                  # Failure-mode catalog from M1
-```
-
----
-
-## Milestone Roadmap
-
-| Milestone | Status | Output |
-| --- | --- | --- |
-| M1 — Pipeline foundation | ✅ Shipped | Agents 1–3 + post-mortem series |
-| M2 — Signals MVP | ✅ Shipped | Agent 5 + Akamai CR comparison (this README) |
-| M2.5 — Lumenalta + Workday CR | Next | Two more human-vs-agent comparisons |
-| M3 — Pipeline-generated analysis | Planned | First end-to-end output on a company I haven't analyzed |
-| M4 — Production hardening | Planned | Ragas eval, Langfuse observability, LangGraph migration |
-
----
-
-## Known Gaps (Documented, Not Hidden)
-
-- **Agent 5 ambiguous-cue bloat.** Four variants of "single posting = backfill?". Needs prompt refinement to consolidate.
-- **Agent 5 `career_ceiling` over-escalation.** Enum mapping logic needs a calibration pass.
-- **No formal evaluation framework yet.** Ragas + golden datasets planned for M4.
-- **No cost observability.** Token usage per agent invocation not yet tracked. Planned for M4.
-- **Agent 2 Pydantic validation errors** on LinkedIn and Indeed CR sources. Workaround in place; root-cause fix deferred to M3.
-
-These are public roadmap items, not surprises.
-
----
-
-## Why This Project Exists
-
-This pipeline exists to make my engineering judgment legible at Staff+ level without leaning on credentials.
-
-Every milestone ships an artifact: working code, a failure-mode catalog, or a comparison like this one. The point is not to claim the agent is better than a human. The point is to document — honestly, with evidence — what production-grade agentic systems actually look like, where they fail, and where they help.
-
-If you're hiring for production agentic work, the post-mortems, the schemas, and the comparison tables are the résumé.
-
----
-
-**Contact:** [your contact]
-**LinkedIn post for M2:** [link]
-**Built with:** Claude Sonnet 4.5, Pydantic v2, and a strict no-peek protocol between human and agent.

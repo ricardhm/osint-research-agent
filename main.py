@@ -130,7 +130,6 @@ def save_pipeline_state(state: OSINTPipelineState):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Inside Scoop OSINT Pipeline")
     parser.add_argument("--company", required=True, help="Company name to analyze")
-    parser.add_argument("--location", default="Costa Rica", help="Location filter (default: Costa Rica)")
     args = parser.parse_args()
 
     target = args.company

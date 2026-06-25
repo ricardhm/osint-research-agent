@@ -18,7 +18,7 @@ client = anthropic.Anthropic()
 
 # Modelo contenedor para el Tool Use de Anthropic
 class LLM_PostingOutput(BaseModel):
-    postings: List[RawPosting]
+    postings: List[RawPosting] = []
 
 def extract_postings_from_text(content: str, source_url: str, source_type: SourceType) -> List[RawPosting]:
     """
