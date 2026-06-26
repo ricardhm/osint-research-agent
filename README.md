@@ -171,6 +171,14 @@ Agent 6 (Markdown Output) ← planned M3
 
 **State contract:** All agents read and write `OSINTPipelineState` — a Pydantic v2 model that defines the inter-agent boundary. Schema-first by design.
 
+**Post-mortem catalog:**
+
+| # | Title | Severity | Status |
+|---|---|---|---|
+| [01](docs/post_mortems/01-url-hallucination-and-scraping.md) | Agent 1 URL hallucination + Agent 3 silent fallback ambiguity | High / Medium | Resolved |
+| [02](docs/post_mortems/02-dedup-unicode-normalization.md) | Dedup Unicode normalization | — | Resolved |
+| [03](docs/post_mortems/03-agent5-structural-fields-missing.md) | Agent 5 structural fields missing on chunked path (BCG run) | High | Resolved |
+
 **Stack:**
 
 - Python 3.14
@@ -271,6 +279,8 @@ Every gap below ships an artifact. The artifact is the deliverable, not the code
 
 - **Agent 5 ambiguous-cue bloat.** Four variants of "single posting = backfill?". Needs prompt refinement to consolidate.
 - **Agent 5 `career_ceiling` over-escalation.** Enum mapping logic needs a calibration pass.
+- **Agent 5 `max_tokens` ceiling.** 3000 tokens causes truncation on large chunk 1 inputs (BCG run, PM 03). Raising to 4500 is the correct fix; current patch fills missing structural fields with safe defaults. Open action item from PM 03.
+- **Agent 5 chunked path untested.** `CHUNK_SIZE = 15` logic was never exercised before BCG (18 active postings). No fixture exists for ≥16 active postings. Open action item from PM 03.
 - **Agent 2 Pydantic validation errors** on LinkedIn and Indeed CR sources. Workaround in place; root-cause fix deferred to M3.
 - **`--location` flag not yet wired.** Pipeline is currently Costa Rica–only. Multi-market support requires parameterizing Agent 1 URL generation and Agent 2 routing.
 
