@@ -173,7 +173,18 @@ def _call_llm(
                     f"  raw_input={block.input}\n"
                     f"  validation_error={e}"
                 )
-                raise
+                # Patch safe defaults for structurally-missing metadata fields.
+                # The LLM occasionally omits these while producing correct signal
+                # buckets — losing the full analysis on a schema technicality is
+                # worse than defaulting the structural fields.
+                patched = dict(block.input)
+                patched.setdefault("role_clusters", [])
+                patched.setdefault("pay_transparency_signal", PayTransparency.ABSENT.value)
+                patched.setdefault("hiring_velocity", HiringVelocity.MEDIUM.value)
+                if not patched.get("red_flags"):
+                    patched.setdefault("red_flags_note", "No red flags detected in this pass.")
+                print(f"[PYDANTIC_FALLBACK] retrying with patched defaults for {chunk_label}...")
+                return InsideScoopOutput(**patched)
 
     raise ValueError(f"Agent 5 no devolvió record_signals para {chunk_label}.")
 
