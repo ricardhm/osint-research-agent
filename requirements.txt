@@ -1,5 +1,7 @@
 anthropic>=0.104.0
+fastapi>=0.115.0
 firecrawl-py>=4.28.0
 playwright>=1.60.0
 pydantic>=2.13.0
 python-dotenv>=1.2.0
+uvicorn>=0.30.0

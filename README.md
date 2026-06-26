@@ -177,6 +177,7 @@ Agent 6 (Markdown Output) ← planned M3
 - Anthropic SDK (Claude Haiku 4.5 for extraction, Sonnet 4.5 for intel)
 - Pydantic v2 for inter-agent contracts and structured outputs
 - Firecrawl + Playwright for web data
+- FastAPI + uvicorn for the REST API layer
 - SQLite + JSON for state persistence
 
 ---
@@ -197,8 +198,29 @@ pip install -r requirements.txt
 cp .env.example .env
 # Add your ANTHROPIC_API_KEY
 
-# Run pipeline on a target company
+# Run pipeline directly via CLI
 python main.py --company "Akamai" --location "Costa Rica"
+
+# Or run as an async REST API (port 8000)
+python api.py
+```
+
+### API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/research` | Start a pipeline run. Body: `{"company": "Akamai"}`. Returns `{job_id, status: "queued"}` immediately. |
+| `GET` | `/research/{job_id}` | Poll job status: `queued` → `running` → `completed` / `failed`. Completed response includes full `OSINTPipelineState` as JSON. |
+| `GET` | `/health` | Liveness check. Returns `{"status": "ok"}`. |
+
+```bash
+# Start a run
+curl -X POST http://localhost:8000/research \
+  -H "Content-Type: application/json" \
+  -d '{"company": "Akamai"}'
+
+# Poll for results
+curl http://localhost:8000/research/<job_id>
 ```
 
 ---
@@ -214,8 +236,9 @@ osint-research-agent/
 │   ├── agent_4_culture_intel.py
 │   ├── agent_5_signals.py
 │   └── agent_6_output.py
-├── models.py                          # OSINTPipelineState, Pydantic schemas
-├── main.py                            # Orchestrator
+├── models.py                          # Pydantic schemas (inter-agent contracts)
+├── main.py                            # Orchestrator + CLI entry point
+├── api.py                             # FastAPI REST layer (wraps main.py)
 ├── outputs/
 │   └── akamai_inside_scoop.json       # Agent 5 output
 ├── manual_analyses/
